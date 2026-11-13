@@ -184,6 +184,7 @@ parameter CONF_STR = {
 	"P2O7,Swap Joysticks,No,Yes;",
 	"P2O8,SNAC,No,Yes;",
 	"P2O[53],State Ld/Sv,Start+Up/Down,Up/Down;",
+	"P2O[58],Folder step buttons,Off,On;",
 	"P2-;",
 	"P2oB,Miracle Piano,No,Yes;",
 	"P2OH,Multitap,Disabled,Port2;",
@@ -1291,13 +1292,36 @@ end
 
 wire msu_enable;
 
-// EXT bus is used to communicate with the HPS for MSU functionality
+// EXT bus is used to communicate with the HPS for MSU functionality and for the
+// folder-as-playlist example. hps_io has one EXT_BUS port, hps_ext and folder_step
+// both assign the answer side, so each gets a private bus; see rtl/folder_step.sv.
 wire [35:0] EXT_BUS;
+wire [35:0] EXT_BUS_MSU, EXT_BUS_FOLDER;
+
+assign EXT_BUS_MSU   [35:33] = EXT_BUS[35:33];
+assign EXT_BUS_MSU   [31:16] = EXT_BUS[31:16];
+assign EXT_BUS_FOLDER[35:33] = EXT_BUS[35:33];
+assign EXT_BUS_FOLDER[31:16] = EXT_BUS[31:16];
+
+assign EXT_BUS[32]   = EXT_BUS_MSU[32] | EXT_BUS_FOLDER[32];
+assign EXT_BUS[15:0] = EXT_BUS_FOLDER[32] ? EXT_BUS_FOLDER[15:0] : EXT_BUS_MSU[15:0];
+
+// Not reset by cart_download etc.: the request counter must survive loading the next file.
+folder_step folder_step
+(
+	.clk(clk_sys),
+	.reset(RESET),
+	.EXT_BUS(EXT_BUS_FOLDER),
+	.enable(status[58]),
+	.osd_open(OSD_STATUS),
+	.joy(joy0)
+);
+
 hps_ext hps_ext
 (
 	.reset(reset),
 	.clk_sys(clk_sys),
-	.EXT_BUS(EXT_BUS),
+	.EXT_BUS(EXT_BUS_MSU),
 
 	.msu_enable(msu_enable),
 
